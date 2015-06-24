@@ -17,6 +17,6 @@ Enter the browser test directory.
 Check out a commit you want to run your browser tests again.
 Run:
 
-    barrybot.sh
+    ./barrybot.py --project 'mediawiki/extensions/Gather' --core '/Users/jrobson/git/core/' --test /Users/jrobson/git/core/extensions/Gather/ --tag wip --dependencies /Users/jrobson/git/core/extensions/MobileFrontend/
 
 Barry will let you know if he likes it.
