@@ -56,6 +56,8 @@ def get_pending_changes( project, user ):
 def checkout_commit( path, changeid ):
     print "Preparing to test change %s..." % changeid
     args = ["cd", path, "&&",
+        # might be in a dirty state
+        'git', 'stash', '&&',
         "git", "review", "-d", changeid
      ]
     run_shell_command(args)
