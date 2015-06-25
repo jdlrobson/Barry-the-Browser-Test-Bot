@@ -22,17 +22,21 @@ import subprocess
 import argparse
 import sys
 
-def run_shell_command( args ):
+def run_shell_command( args, verbose = False ):
     cmd = " ".join( args )
     process = subprocess.Popen( cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True )
+    if verbose:
+        print "Running `%s`" %cmd
     return process.communicate()
 
-def run_maintenance_scripts( mediawikipath ):
+def run_maintenance_scripts( mediawikipath, verbose = False ):
     args = ['cd', mediawikipath, '&&',
         'php', 'maintenance/update.php' ]
-    run_shell_command(args)
+    output, error = run_shell_command( args, verbose )
+    if verbose:
+        print output
 
-def update_code_to_master( paths ):
+def update_code_to_master( paths, verbose = False ):
     print "Updating to latest code..."
     for path in paths:
         args = ['cd', path, '&&',
@@ -41,10 +45,14 @@ def update_code_to_master( paths ):
             'git', 'stash', '&&',
             # Update code
             'git', 'pull', 'origin', 'master' ]
-        run_shell_command(args)
+        output, error = run_shell_command( args, verbose )
+        if verbose:
+            print output
 
-def get_pending_changes( project, user ):
+def get_pending_changes( project, user, verbose = False ):
     url = "https://gerrit.wikimedia.org/r/changes/?q=project:%s+(label:Verified>=0)+AND+status:open+AND+NOT+reviewer:\"%s\"&O=1"%(project,user)
+    if verbose:
+        print "Request %s"%url
     req = urllib2.Request(url)
     req.add_header('Accept',
                    'application/json,application/json,application/jsonrequest')
@@ -53,28 +61,34 @@ def get_pending_changes( project, user ):
     data = json.loads(data)
     return data
 
-def checkout_commit( path, changeid ):
+def checkout_commit( path, changeid, verbose = False ):
     print "Preparing to test change %s..." % changeid
     args = ["cd", path, "&&",
         # might be in a dirty state
         'git', 'stash', '&&',
         "git", "review", "-d", changeid
      ]
-    run_shell_command(args)
+    output, error = run_shell_command( args, verbose )
+    if verbose:
+        print output
     # get the latest commit
     args = [ "cd", path, "&&",  "git", "rev-parse", "HEAD" ]
-    output, error = run_shell_command(args)
+    output, error = run_shell_command( args, verbose )
+    if verbose:
+        print output
     commit = output.strip()
     return commit
 
-def bundle_install( path ):
+def bundle_install( path, verbose = False ):
     print 'Running bundle install'
     args = ['cd', path, '&&',
         'cd', 'tests/browser/', '&&',
         'bundle', 'install' ]
-    run_shell_command(args)
+    output, error = run_shell_command( args, verbose )
+    if verbose:
+        print output
 
-def run_browser_tests( path, tag = None ):
+def run_browser_tests( path, tag = None, verbose = False ):
     print 'Running browser tests...'
     args = ['cd', path, '&&',
         'cd', 'tests/browser/', '&&',
@@ -84,7 +98,9 @@ def run_browser_tests( path, tag = None ):
     if tag:
         args.extend( [ '--tags', '@' + tag ] )
 
-    output, error = run_shell_command(args)
+    output, error = run_shell_command( args, verbose )
+    if verbose:
+        print output
     # Make this execute cucumber
     if output:
         is_good = False
@@ -93,7 +109,7 @@ def run_browser_tests( path, tag = None ):
         output = 'Barry says good job. Keep it up.'
     return is_good, output
 
-def do_review( pathtotest, commit, is_good, msg, action ):
+def do_review( pathtotest, commit, is_good, msg, action, verbose = False ):
     print "Posting to Gerrit..."
     args = [ 'cd', pathtotest, '&&',
         'ssh', '-p 29418',
@@ -115,7 +131,9 @@ def do_review( pathtotest, commit, is_good, msg, action ):
         args.extend( [ '--message', "\"'" + msg.replace( '"', '' ).replace( "'", '' ) + "'\"" ] )
     args.append( commit )
     # Turn on when you trust it.
-    run_shell_command(args)
+    output, error = run_shell_command( args, verbose )
+    if verbose:
+        print output
 
 
 def get_parser_arguments():
@@ -128,10 +146,11 @@ def get_parser_arguments():
     parser.add_argument('--noupdates', help='This will do no review but will tell you what it is about to review', type=bool)
     parser.add_argument('--review', help='This will post actual reviews to Gerrit. Only use when you are sure Barry is working.', type=bool)
     parser.add_argument('--verify', help='This will post actual reviews to Gerrit. Only use when you are sure Barry is working.', type=bool)
+    parser.add_argument('--verbose', help='Advanced debugging.', type=bool)
     parser.add_argument('--user', help='The username of the bot which will do the review.', type=str, default='BarryTheBrowserTestBot')
     return parser
 
-def watch( project, user, mediawikipath, pathtotest, tag = None, dependencies=[], noupdates = False, action = None ):
+def watch( project, user, mediawikipath, pathtotest, tag = None, dependencies=[], noupdates = False, action = None, verbose = False ):
     paths = [ mediawikipath, pathtotest ]
     paths.extend( dependencies )
     print "Searching for patches to review..."
@@ -142,16 +161,16 @@ def watch( project, user, mediawikipath, pathtotest, tag = None, dependencies=[]
     for change in changes:
         print "Testing %s..."%change['subject']
         if not noupdates:
-            update_code_to_master( paths )
-            run_maintenance_scripts( mediawikipath )
-        commit = checkout_commit( pathtotest, str(change["_number"]) )
+            update_code_to_master( paths, verbose )
+            run_maintenance_scripts( mediawikipath, verbose )
+        commit = checkout_commit( pathtotest, str( change["_number"] ), verbose )
         if not noupdates:
-            bundle_install( pathtotest )
-        is_good, output = run_browser_tests( pathtotest, tag )
+            bundle_install( pathtotest, verbose )
+        is_good, output = run_browser_tests( pathtotest, tag, verbose )
         print 'Reviewing commit %s with (is good = %s)..' %( commit, is_good )
         print output
         if action:
-            do_review( pathtotest, commit, is_good, output, action )
+            do_review( pathtotest, commit, is_good, output, action, verbose )
 
 if __name__ == '__main__':
     parser = get_parser_arguments()
@@ -173,5 +192,5 @@ if __name__ == '__main__':
         args.core,
         args.test,
         args.tag,
-        deps, args.noupdates, action )
+        deps, args.noupdates, action, args.verbose )
 
