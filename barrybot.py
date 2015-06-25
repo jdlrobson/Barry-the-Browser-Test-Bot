@@ -40,9 +40,9 @@ def update_code_to_master( paths, verbose = False ):
     print "Updating to latest code..."
     for path in paths:
         args = ['cd', path, '&&',
-            'git', 'checkout', 'master', '&&',
             # Stuff might be dirty
             'git', 'stash', '&&',
+            'git', 'checkout', 'master', '&&',
             # Update code
             'git', 'pull', 'origin', 'master' ]
         output, error = run_shell_command( args, verbose )
@@ -66,6 +66,7 @@ def checkout_commit( path, changeid, verbose = False ):
     args = ["cd", path, "&&",
         # might be in a dirty state
         'git', 'stash', '&&',
+        'git', 'checkout', 'master', '&&',
         "git", "review", "-d", changeid
      ]
     output, error = run_shell_command( args, verbose )
