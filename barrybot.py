@@ -22,9 +22,17 @@ import subprocess
 import argparse
 import sys
 
-def run_shell_command( args, verbose = False ):
+def run_shell_command( args, pre_pipe_args=None, verbose = False ):
+    """
+    run_shell_command(['echo', 'hi']) runs 'echo hi'
+    run_shell_command(['grep', 'hi'], ['cat', 'hi.txt']) runs 'cat hi.txt | grep hi'
+    """
     cmd = " ".join( args )
-    process = subprocess.Popen( cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True )
+    if pre_pipe_args:
+        pre_pipe = subprocess.Popen(pre_pipe_args, stdout=subprocess.PIPE)
+        process = subprocess.Popen(args, stdin=pre_pipe.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    else:
+        process = subprocess.Popen( cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True )
     if verbose:
         print "Running `%s`" %cmd
     return process.communicate()
@@ -32,7 +40,7 @@ def run_shell_command( args, verbose = False ):
 def run_maintenance_scripts( mediawikipath, verbose = False ):
     args = ['cd', mediawikipath, '&&',
         'php', 'maintenance/update.php' ]
-    output, error = run_shell_command( args, verbose )
+    output, error = run_shell_command( args, verbose=verbose )
     if verbose:
         print output
 
@@ -45,7 +53,7 @@ def update_code_to_master( paths, verbose = False ):
             'git', 'checkout', 'master', '&&',
             # Update code
             'git', 'pull', 'origin', 'master' ]
-        output, error = run_shell_command( args, verbose )
+        output, error = run_shell_command( args, verbose=verbose )
         if verbose:
             print output
 
@@ -69,12 +77,12 @@ def checkout_commit( path, changeid, verbose = False ):
         'git', 'checkout', 'master', '&&',
         "git", "review", "-d", changeid
      ]
-    output, error = run_shell_command( args, verbose )
+    output, error = run_shell_command( args, verbose=verbose )
     if verbose:
         print output
     # get the latest commit
     args = [ "cd", path, "&&",  "git", "rev-parse", "HEAD" ]
-    output, error = run_shell_command( args, verbose )
+    output, error = run_shell_command( args, verbose=verbose )
     if verbose:
         print output
     commit = output.strip()
@@ -85,7 +93,7 @@ def bundle_install( path, verbose = False ):
     args = ['cd', path, '&&',
         'cd', 'tests/browser/', '&&',
         'bundle', 'install' ]
-    output, error = run_shell_command( args, verbose )
+    output, error = run_shell_command( args, verbose=verbose )
     if verbose:
         print output
 
@@ -93,13 +101,12 @@ def run_browser_tests( path, tag = None, verbose = False ):
     print 'Running browser tests...'
     args = ['cd', path, '&&',
         'cd', 'tests/browser/', '&&',
-        'bundle', 'exec', 'cucumber', 'features/', 
-        '--format', 'rerun'
+        'bundle', 'exec', 'cucumber', 'features/',
     ]
     if tag:
         args.extend( [ '--tags', '@' + tag ] )
 
-    output, error = run_shell_command( args, verbose )
+    output, error = run_shell_command( args, verbose=verbose )
     if verbose:
         print output
     # Make this execute cucumber
@@ -132,7 +139,7 @@ def do_review( pathtotest, commit, is_good, msg, action, verbose = False ):
         args.extend( [ '--message', "\"'" + msg.replace( '"', '' ).replace( "'", '' ) + "'\"" ] )
     args.append( commit )
     # Turn on when you trust it.
-    output, error = run_shell_command( args, verbose )
+    output, error = run_shell_command( args, verbose=verbose )
     if verbose:
         print output
 
@@ -149,9 +156,18 @@ def get_parser_arguments():
     parser.add_argument('--verify', help='This will post actual reviews to Gerrit. Only use when you are sure Barry is working.', type=bool)
     parser.add_argument('--verbose', help='Advanced debugging.', type=bool)
     parser.add_argument('--user', help='The username of the bot which will do the review.', type=str, default='BarryTheBrowserTestBot')
+    parser.add_argument('--paste', help='This will post failed test results to phabricator and share the url in the posted review.', type=bool)
     return parser
 
-def watch( project, user, mediawikipath, pathtotest, tag = None, dependencies=[], noupdates = False, action = None, verbose = False ):
+def get_paste_url(text):
+    """ paste text into Phabricator
+    Return paste URL
+    """
+    output, error = run_shell_command(['arc', 'paste'], ['echo', text])
+    # output looks something like "P899: https://phabricator.wikimedia.org/P899"
+    return output.split(': ')[1].strip()
+
+def watch( project, user, mediawikipath, pathtotest, tag = None, dependencies=[], noupdates = False, paste=False, action = None, verbose = False ):
     paths = [ mediawikipath, pathtotest ]
     paths.extend( dependencies )
     print "Searching for patches to review..."
@@ -168,9 +184,12 @@ def watch( project, user, mediawikipath, pathtotest, tag = None, dependencies=[]
         if not noupdates:
             bundle_install( pathtotest, verbose )
         is_good, output = run_browser_tests( pathtotest, tag, verbose )
-        print 'Reviewing commit %s with (is good = %s)..' %( commit, is_good )
         print output
+        if paste:
+            print 'Pasting commit %s with (is good = %s)..' %(commit, is_good)
+            output = get_paste_url(output)
         if action:
+            print 'Reviewing commit %s with (is good = %s)..' %( commit, is_good )
             do_review( pathtotest, commit, is_good, output, action, verbose )
 
 if __name__ == '__main__':
@@ -188,10 +207,16 @@ if __name__ == '__main__':
     else:
         action = 'verified'
 
-    watch( args.project,
+    watch(
+        args.project,
         args.user,
         args.core,
         args.test,
         args.tag,
-        deps, args.noupdates, action, args.verbose )
+        deps,
+        args.noupdates,
+        args.paste,
+        action,
+        args.verbose
+    )
 
