@@ -35,7 +35,8 @@ def run_shell_command( args, pre_pipe_args=None, verbose = False ):
         process = subprocess.Popen( cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True )
     if verbose:
         print "Running `%s`" %cmd
-    return process.communicate()
+    out, err = process.communicate()
+    return out, process.returncode > 0
 
 def run_maintenance_scripts( mediawikipath, verbose = False ):
     args = ['cd', mediawikipath, '&&',
@@ -97,21 +98,23 @@ def bundle_install( path, verbose = False ):
     if verbose:
         print output
 
-def run_browser_tests( path, tag = None, verbose = False ):
+def run_browser_tests( path, tag = None, verbose = False, dry_run = False ):
     print 'Running browser tests...'
     args = ['cd', path, '&&',
         'cd', 'tests/browser/', '&&',
         'bundle', 'exec', 'cucumber', 'features/',
     ]
+    if dry_run:
+        args.extend( [ '--format', 'rerun' ] )
     if tag:
         args.extend( [ '--tags', '@' + tag ] )
 
     output, error = run_shell_command( args, verbose=verbose )
     if verbose:
         print output
-    # Make this execute cucumber
-    if output:
-        is_good = False
+
+    if error:
+       is_good = False
     else:
         is_good = True
         output = 'Barry says good job. Keep it up.'
@@ -183,7 +186,7 @@ def watch( project, user, mediawikipath, pathtotest, tag = None, dependencies=[]
         commit = checkout_commit( pathtotest, str( change["_number"] ), verbose )
         if not noupdates:
             bundle_install( pathtotest, verbose )
-        is_good, output = run_browser_tests( pathtotest, tag, verbose )
+        is_good, output = run_browser_tests( pathtotest, tag, verbose, not paste )
         print output
         if paste:
             print 'Pasting commit %s with (is good = %s)..' %(commit, is_good)
