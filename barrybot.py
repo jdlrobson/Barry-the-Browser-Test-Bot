@@ -107,7 +107,9 @@ def run_browser_tests( path, tag = None, verbose = False, dry_run = False ):
     if dry_run:
         args.extend( [ '--format', 'rerun' ] )
     if tag:
-        args.extend( [ '--tags', '@' + tag ] )
+        if tag[0] != '@' and tag[0]  != '~':
+            tag = '@' + tag
+        args.extend( [ '--tags', tag ] )
 
     output, error = run_shell_command( args, verbose=verbose )
     if verbose:
