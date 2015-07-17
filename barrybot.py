@@ -192,7 +192,8 @@ def watch( project, user, mediawikipath, pathtotest, tag = None, dependencies=[]
         print output
         if paste:
             print 'Pasting commit %s with (is good = %s)..' %(commit, is_good)
-            output = get_paste_url(output)
+            if not is_good:
+                output = get_paste_url(output)
         if action:
             print 'Reviewing commit %s with (is good = %s)..' %( commit, is_good )
             do_review( pathtotest, commit, is_good, output, action, verbose )
