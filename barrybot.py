@@ -162,6 +162,7 @@ def get_parser_arguments():
     parser.add_argument('--verbose', help='Advanced debugging.', type=bool)
     parser.add_argument('--user', help='The username of the bot which will do the review.', type=str, default='BarryTheBrowserTestBot')
     parser.add_argument('--paste', help='This will post failed test results to phabricator and share the url in the posted review.', type=bool)
+    parser.add_argument('--nobundleinstall', help='When set skip the bundle install step.', type=bool)
     return parser
 
 def get_paste_url(text):
@@ -172,7 +173,7 @@ def get_paste_url(text):
     # output looks something like "P899: https://phabricator.wikimedia.org/P899"
     return output.split(': ')[1].strip()
 
-def watch( project, user, mediawikipath, pathtotest, tag = None, dependencies=[], noupdates = False, paste=False, action = None, verbose = False ):
+def watch( project, user, mediawikipath, pathtotest, tag = None, dependencies=[], noupdates = False, paste=False, action = None, verbose = False, nobundleinstall= False ):
     paths = [ mediawikipath, pathtotest ]
     paths.extend( dependencies )
     print "Searching for patches to review..."
@@ -186,7 +187,7 @@ def watch( project, user, mediawikipath, pathtotest, tag = None, dependencies=[]
             update_code_to_master( paths, verbose )
             run_maintenance_scripts( mediawikipath, verbose )
         commit = checkout_commit( pathtotest, str( change["_number"] ), verbose )
-        if not noupdates:
+        if not noupdates and not nobundleinstall:
             bundle_install( pathtotest, verbose )
         is_good, output = run_browser_tests( pathtotest, tag, verbose, not paste )
         print output
@@ -224,6 +225,7 @@ if __name__ == '__main__':
         args.noupdates,
         args.paste,
         action,
-        args.verbose
+        args.verbose,
+        args.nobundleinstall
     )
 
