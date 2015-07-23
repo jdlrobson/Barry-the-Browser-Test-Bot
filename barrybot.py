@@ -173,32 +173,42 @@ def get_paste_url(text):
     # output looks something like "P899: https://phabricator.wikimedia.org/P899"
     return output.split(': ')[1].strip()
 
-def watch( project, user, mediawikipath, pathtotest, tag = None, dependencies=[], noupdates = False, paste=False, action = None, verbose = False, nobundleinstall= False ):
-    paths = [ mediawikipath, pathtotest ]
+def watch( args ):
+    verbose = args.verbose,
+    if args.dependencies:
+        dependencies = args.dependencies
+    else:
+        dependencies = []
+    if args.review:
+        action = 'code-review'
+    else:
+        action = 'verified'
+
+    paths = [ args.core, args.test ]
     paths.extend( dependencies )
     print "Searching for patches to review..."
-    changes = get_pending_changes( project, user )
+    changes = get_pending_changes( args.project, args.user )
     if len( changes ) == 0:
         print "No changes."
 
     for change in changes:
         print "Testing %s..."%change['subject']
-        if not noupdates:
+        if not args.noupdates:
             update_code_to_master( paths, verbose )
-            run_maintenance_scripts( mediawikipath, verbose )
-        commit = checkout_commit( pathtotest, str( change["_number"] ), verbose )
-        if not noupdates and not nobundleinstall:
-            bundle_install( pathtotest, verbose )
-        is_good, output = run_browser_tests( pathtotest, tag, verbose, not paste )
+            run_maintenance_scripts( args.core, verbose )
+        commit = checkout_commit( args.test, str( change["_number"] ), verbose )
+        if not args.noupdates and not args.nobundleinstall:
+            bundle_install( args.test, verbose )
+        is_good, output = run_browser_tests( args.test, args.tag, verbose, not args.paste )
         print output
-        if paste:
+        if args.paste:
             if not is_good:
                 print 'Pasting commit %s with (is good = %s)..' %(commit, is_good)
                 output = get_paste_url(output)
                 print "Result pasted to %s"%output
         if action:
             print 'Reviewing commit %s with (is good = %s)..' %( commit, is_good )
-            do_review( pathtotest, commit, is_good, output, action, verbose )
+            do_review( args.test, commit, is_good, output, action, verbose )
 
 if __name__ == '__main__':
     parser = get_parser_arguments()
@@ -206,26 +216,6 @@ if __name__ == '__main__':
     if not args.project or not args.core or not args.test:
         print 'Project, core and test are needed.'
         sys.exit(1)
-    if args.dependencies:
-        deps = args.dependencies
-    else:
-        deps = []
-    if args.review:
-        action = 'code-review'
-    else:
-        action = 'verified'
 
-    watch(
-        args.project,
-        args.user,
-        args.core,
-        args.test,
-        args.tag,
-        deps,
-        args.noupdates,
-        args.paste,
-        action,
-        args.verbose,
-        args.nobundleinstall
-    )
+    watch( args )
 
