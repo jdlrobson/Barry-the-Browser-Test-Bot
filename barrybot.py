@@ -159,7 +159,7 @@ def get_parser_arguments():
     parser.add_argument('--review', help='This will post actual reviews to Gerrit. Only use when you are sure Barry is working.', type=bool)
     parser.add_argument('--verify', help='This will post actual reviews to Gerrit. Only use when you are sure Barry is working.', type=bool)
     parser.add_argument('--verbose', help='Advanced debugging.', type=bool)
-    parser.add_argument('--user', help='The username of the bot which will do the review.', type=str, default='BarryTheBrowserTestBot')
+    parser.add_argument('--user', help='The username of the bot which will do the review.', type=str)
     parser.add_argument('--paste', help='This will post failed test results to phabricator and share the url in the posted review.', type=bool)
     parser.add_argument('--nobundleinstall', help='When set skip the bundle install step.', type=bool)
     parser.add_argument('--successmsg', help='Defines the message to show for successful commits', type=str, default='I ran browser tests for your patch and everything looks good. Merge with confidence!')
@@ -188,7 +188,13 @@ def watch( args ):
     paths = [ args.core, args.test ]
     paths.extend( dependencies )
     print "Searching for patches to review..."
-    changes = get_pending_changes( args.project, args.user )
+    if args.user:
+        user = args.user
+    else:
+        user, code = run_shell_command( [ 'git config --global user.name' ] )
+        user = user.strip()
+
+    changes = get_pending_changes( args.project, user )
     if len( changes ) == 0:
         print "No changes."
 
