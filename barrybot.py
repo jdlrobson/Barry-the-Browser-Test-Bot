@@ -119,7 +119,6 @@ def run_browser_tests( path, tag = None, verbose = False, dry_run = False ):
        is_good = False
     else:
         is_good = True
-        output = 'Barry says good job. Keep it up.'
     return is_good, output
 
 def do_review( pathtotest, commit, is_good, msg, action, verbose = False ):
@@ -163,6 +162,8 @@ def get_parser_arguments():
     parser.add_argument('--user', help='The username of the bot which will do the review.', type=str, default='BarryTheBrowserTestBot')
     parser.add_argument('--paste', help='This will post failed test results to phabricator and share the url in the posted review.', type=bool)
     parser.add_argument('--nobundleinstall', help='When set skip the bundle install step.', type=bool)
+    parser.add_argument('--successmsg', help='Defines the message to show for successful commits', type=str, default='I ran browser tests for your patch and everything looks good. Merge with confidence!')
+    parser.add_argument('--errormsg', help='Defines the message to show for bad commits', type=str, default='I ran browser tests for your patch and there were some errors you might want to look into:\n%s')
     return parser
 
 def get_paste_url(text):
@@ -200,15 +201,26 @@ def watch( args ):
         if not args.noupdates and not args.nobundleinstall:
             bundle_install( args.test, verbose )
         is_good, output = run_browser_tests( args.test, args.tag, verbose, not args.paste )
-        print output
+        if verbose:
+            print output
         if args.paste:
             if not is_good:
                 print 'Pasting commit %s with (is good = %s)..' %(commit, is_good)
-                output = get_paste_url(output)
-                print "Result pasted to %s"%output
+                paste_url = get_paste_url(output)
+                print "Result pasted to %s"%paste_url
+        else:
+            paste_url = None
+
+        if is_good:
+            review_msg = args.successmsg
+        else:
+            if paste_url:
+                review_msg = args.errormsg%paste_url
+            else:
+                review_msg = args.errormsg%output
         if action:
             print 'Reviewing commit %s with (is good = %s)..' %( commit, is_good )
-            do_review( args.test, commit, is_good, output, action, verbose )
+            do_review( args.test, commit, is_good, review_msg, action, verbose )
 
 if __name__ == '__main__':
     parser = get_parser_arguments()
