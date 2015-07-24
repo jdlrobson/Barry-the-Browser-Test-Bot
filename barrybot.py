@@ -121,11 +121,13 @@ def run_browser_tests( path, tag = None, verbose = False, dry_run = False ):
         is_good = True
     return is_good, output
 
-def do_review( pathtotest, commit, is_good, msg, action, verbose = False ):
+def do_review( pathtotest, commit, is_good, msg, action, verbose = False, user = None ):
     print "Posting to Gerrit..."
     args = [ 'cd', pathtotest, '&&',
-        'ssh', '-p 29418',
-        'gerrit.wikimedia.org', 'gerrit', 'review' ]
+        'ssh', '-p 29418' ]
+    if user:
+        args.extend( [ '-l', user ] )
+    args.extend( [ 'gerrit.wikimedia.org', 'gerrit', 'review' ] )
     if action == 'verified':
         if is_good:
             score = '+2'
@@ -226,7 +228,7 @@ def watch( args ):
                 review_msg = args.errormsg%output
         if action:
             print 'Reviewing commit %s with (is good = %s)..' %( commit, is_good )
-            do_review( args.test, commit, is_good, review_msg, action, verbose )
+            do_review( args.test, commit, is_good, review_msg, action, verbose, args.user )
 
 if __name__ == '__main__':
     parser = get_parser_arguments()
