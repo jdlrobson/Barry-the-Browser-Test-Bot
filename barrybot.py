@@ -21,6 +21,7 @@ import json
 import subprocess
 import argparse
 import sys
+import paramiko
 
 def run_shell_command( args, pre_pipe_args=None, verbose = False ):
     """
@@ -157,6 +158,7 @@ def get_parser_arguments():
     parser.add_argument('--dependencies', help='Absolute path to a dependency e.g /git/core/extensions/MobileFrontend', type=str, nargs='+')
     parser.add_argument('--tag', help='A tag to run a subset of tests. e.g. `wip`', type=str)
     parser.add_argument('--noupdates', help='This will do no review but will tell you what it is about to review', type=bool)
+    parser.add_argument('--realtime', help='Switch to real time watching', type=bool)
     parser.add_argument('--review', help='This will post actual reviews to Gerrit. Only use when you are sure Barry is working.', type=bool)
     parser.add_argument('--verify', help='This will post actual reviews to Gerrit. Only use when you are sure Barry is working.', type=bool)
     parser.add_argument('--verbose', help='Advanced debugging.', type=bool)
@@ -182,6 +184,37 @@ def get_username( args ):
         user, code = run_shell_command( [ 'git config --global user.name' ] )
         user = user.strip()
     return user
+
+def do_realtime_watch( args ):
+    print "Watching for new patches..."
+    ssh_username = get_username( args )
+    projects = args.project
+
+    client = paramiko.SSHClient()
+    client.load_system_host_keys()
+    client.connect('gerrit.wikimedia.org', port=29418,look_for_keys=False,username=ssh_username)
+
+    stdin, stdout, stderr = client.exec_command('gerrit stream-events')
+    for line in stdout:
+        data = json.loads(line.strip('\n'))
+        if args.verbose:
+            print 'Got one.'
+        if data["type"] in ['patchset-created']:
+            this_patch_project = data["change"]["project"]
+            if args.verbose:
+                print data
+                print this_patch_project
+                print data["change"]["number"]
+                print projects
+            if this_patch_project in projects or '*' in projects:
+                change = data["change"]
+                change_id = data["change"]["number"]
+                print "reviewing %s"%change_id
+                test_change( change_id, args )
+                print "done reviewing"
+        elif args.verbose:
+          print 'Patch not of interest. Waiting on another.'
+    client.close()
 
 def get_paths( args ):
     if args.dependencies:
@@ -251,5 +284,8 @@ if __name__ == '__main__':
         print 'Project, core and test are needed.'
         sys.exit(1)
 
-    watch( args )
+    if args.realtime:
+        do_realtime_watch( args )
+    else:
+        watch( args )
 
