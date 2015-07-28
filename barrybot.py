@@ -149,7 +149,6 @@ def do_review( pathtotest, commit, is_good, msg, action, verbose = False, user =
     if verbose:
         print output
 
-
 def get_parser_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--project', help='Name of project e.g. mediawiki/extension/Gather', type=str)
@@ -176,59 +175,74 @@ def get_paste_url(text):
     # output looks something like "P899: https://phabricator.wikimedia.org/P899"
     return output.split(': ')[1].strip()
 
-def watch( args ):
-    verbose = args.verbose,
-    if args.dependencies:
-        dependencies = args.dependencies
-    else:
-        dependencies = []
-    if args.review:
-        action = 'code-review'
-    else:
-        action = 'verified'
-
-    paths = [ args.core, args.test ]
-    paths.extend( dependencies )
-    print "Searching for patches to review..."
+def get_username( args ):
     if args.user:
         user = args.user
     else:
         user, code = run_shell_command( [ 'git config --global user.name' ] )
         user = user.strip()
+    return user
 
-    changes = get_pending_changes( args.project, user )
+def get_paths( args ):
+    if args.dependencies:
+        dependencies = args.dependencies
+    else:
+        dependencies = []
+    paths = [ args.core, args.test ]
+    paths.extend( dependencies )
+    return paths
+
+def get_gerrit_action( args ):
+    if args.review:
+        return 'code-review'
+    else:
+        return 'verified'
+
+def watch( args ):
+    verbose = args.verbose
+
+    paths = get_paths()
+    print "Searching for patches to review..."
+    user = get_username()
+    changes = get_pending_changes( args.project[0], user )
     if len( changes ) == 0:
         print "No changes."
 
     for change in changes:
         print "Testing %s..."%change['subject']
-        if not args.noupdates:
-            update_code_to_master( paths, verbose )
-            run_maintenance_scripts( args.core, verbose )
-        commit = checkout_commit( args.test, str( change["_number"] ), verbose )
-        if not args.noupdates and not args.nobundleinstall:
-            bundle_install( args.test, verbose )
-        is_good, output = run_browser_tests( args.test, args.tag, verbose, not args.paste )
-        if verbose:
-            print output
-        if args.paste:
-            if not is_good:
-                print 'Pasting commit %s with (is good = %s)..' %(commit, is_good)
-                paste_url = get_paste_url(output)
-                print "Result pasted to %s"%paste_url
-        else:
-            paste_url = None
+        test_change( change["_number"], args )
 
-        if is_good:
-            review_msg = args.successmsg
+def test_change( change_id, args ):
+    action = get_gerrit_action( args )
+    paths = get_paths( args )
+    user = get_username( args )
+    if not args.noupdates:
+        update_code_to_master( paths, args.verbose )
+        run_maintenance_scripts( args.core, args.verbose )
+    commit = checkout_commit( args.test, str( change_id ), args.verbose )
+    if not args.noupdates and not args.nobundleinstall:
+        bundle_install( args.test, args.verbose )
+    is_good, output = run_browser_tests( args.test, args.tag, args.verbose, not args.paste )
+    if args.verbose:
+        print output
+    if args.paste:
+        if not is_good:
+            print 'Pasting commit %s with (is good = %s)..' %(commit, is_good)
+            paste_url = get_paste_url(output)
+            print "Result pasted to %s"%paste_url
+    else:
+        paste_url = None
+
+    if is_good:
+        review_msg = args.successmsg
+    else:
+        if paste_url:
+            review_msg = args.errormsg%paste_url
         else:
-            if paste_url:
-                review_msg = args.errormsg%paste_url
-            else:
-                review_msg = args.errormsg%output
-        if action:
-            print 'Reviewing commit %s with (is good = %s)..' %( commit, is_good )
-            do_review( args.test, commit, is_good, review_msg, action, verbose, args.user )
+            review_msg = args.errormsg%output
+    if action:
+        print 'Reviewing commit %s with (is good = %s)..' %( commit, is_good )
+        do_review( args.test, commit, is_good, review_msg, action, args.verbose, user )
 
 if __name__ == '__main__':
     parser = get_parser_arguments()
