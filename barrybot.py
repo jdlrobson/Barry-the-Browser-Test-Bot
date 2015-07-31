@@ -230,6 +230,7 @@ def test_change( change_id, args ):
         output = output.strip()
         if not is_good and output:
             print 'Pasting commit %s with (is good = %s)..' %(commit, is_good)
+            output = "[%s]\n" + output
             paste_url = get_paste_url(output)
             print "Result pasted to %s"%paste_url
     else:
